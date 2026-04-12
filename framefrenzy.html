@@ -525,6 +525,39 @@
     clip-path: polygon(0 0, calc(100% - 32px) 0, 100% 32px, 100% 100%, 32px 100%, 0 calc(100% - 32px));
   }
 
+  #tile-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .video-tile {
+    position: absolute;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .video-tile-viewport {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: rgba(0,0,0,0.12);
+  }
+
+  .video-tile-host {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  .video-tile iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    pointer-events: none;
+  }
+
   #puzzle-canvas {
     display: block;
     width: 100%;
@@ -915,6 +948,7 @@
       </div>
 
       <div class="puzzle-wrap" id="puzzle-wrap">
+        <div id="tile-layer"></div>
         <canvas id="puzzle-canvas" aria-label="Sliding puzzle board" role="img"></canvas>
         <div class="loading-overlay" id="loading-overlay">
           <div class="spinner"></div>
@@ -953,8 +987,7 @@
   "use strict";
 
   // ── Config ──
-  const GRID_SIZES = [3, 4, 5, 6];
-  const HIDDEN_VIDEO_SIZE = 640; // px for hidden player
+  const GRID_SIZES = [3, 4];
   let PUZZLE_SIZE = 380;
 
   // ── State ──
@@ -974,6 +1007,12 @@
   let bootTimerId = null;
   let pointerStart = null;
   let awaitingPlaybackStart = false;
+  let audioPlayer = null;
+  let tilePlayers = [];
+  let tileElements = [];
+  let playersReady = 0;
+  let totalPlayersToLoad = 0;
+  let syncIntervalId = null;
 
   // ── DOM refs ──
   const $start = document.getElementById('start-screen');
@@ -989,6 +1028,7 @@
   const $statMoves = document.getElementById('stat-moves');
   const $statGrid = document.getElementById('stat-grid');
   const $puzzleWrap = document.getElementById('puzzle-wrap');
+  const $tileLayer = document.getElementById('tile-layer');
   const $canvas = document.getElementById('puzzle-canvas');
   const ctx = $canvas.getContext('2d');
   const $loading = document.getElementById('loading-overlay');
@@ -1101,6 +1141,7 @@
     gameState = 'idle';
     clearCountdownTimers();
     clearCountdownOverlay();
+    pauseAllPlayers();
     setLoadingState(message);
   }
 
@@ -1116,32 +1157,182 @@
   }
 
   function syncAudioToggle() {
-    if (!puzzlePlayer) {
+    if (!audioPlayer) {
       $audioToggle.textContent = 'Sound on';
       $audioToggle.classList.remove('muted');
       $audioToggle.setAttribute('aria-pressed', 'true');
       return;
     }
 
-    const muted = typeof puzzlePlayer.isMuted === 'function' ? puzzlePlayer.isMuted() : false;
+    const muted = typeof audioPlayer.isMuted === 'function' ? audioPlayer.isMuted() : false;
     $audioToggle.textContent = muted ? 'Sound off' : 'Sound on';
     $audioToggle.classList.toggle('muted', muted);
     $audioToggle.setAttribute('aria-pressed', muted ? 'false' : 'true');
   }
 
   function toggleAudio() {
-    if (!puzzlePlayer) return;
+    if (!audioPlayer) return;
     try {
-      if (puzzlePlayer.isMuted()) {
-        puzzlePlayer.unMute();
-        puzzlePlayer.setVolume(100);
+      if (audioPlayer.isMuted()) {
+        audioPlayer.unMute();
+        audioPlayer.setVolume(100);
       } else {
-        puzzlePlayer.mute();
+        audioPlayer.mute();
       }
     } catch (err) {
       return;
     }
     syncAudioToggle();
+  }
+
+  function stopSyncLoop() {
+    if (syncIntervalId) {
+      clearInterval(syncIntervalId);
+      syncIntervalId = null;
+    }
+  }
+
+  function pauseAllPlayers() {
+    if (audioPlayer) {
+      try { audioPlayer.pauseVideo(); } catch (err) {}
+    }
+    tilePlayers.forEach((player) => {
+      try { player.pauseVideo(); } catch (err) {}
+    });
+  }
+
+  function destroyPuzzlePlayers() {
+    stopSyncLoop();
+    if (audioPlayer) {
+      try { audioPlayer.destroy(); } catch (err) {}
+      audioPlayer = null;
+    }
+    tilePlayers.forEach((player) => {
+      try { player.destroy(); } catch (err) {}
+    });
+    tilePlayers = [];
+    tileElements = [];
+    playersReady = 0;
+    totalPlayersToLoad = 0;
+    const $audioHost = document.getElementById('yt-player');
+    if ($audioHost) $audioHost.innerHTML = '';
+    $tileLayer.innerHTML = '';
+    syncAudioToggle();
+  }
+
+  function updateTileLayout() {
+    const ts = PUZZLE_SIZE / gridSize;
+    for (let tile = 0; tile < tileElements.length; tile++) {
+      const el = tileElements[tile];
+      if (!el) continue;
+      const idx = tiles.indexOf(tile);
+      if (idx < 0) {
+        el.style.display = 'none';
+        continue;
+      }
+      const row = Math.floor(idx / gridSize);
+      const col = idx % gridSize;
+      el.style.display = 'block';
+      el.style.width = ts + 'px';
+      el.style.height = ts + 'px';
+      el.style.left = col * ts + 'px';
+      el.style.top = row * ts + 'px';
+    }
+  }
+
+  function handlePlayerReady() {
+    playersReady++;
+    if (playersReady < totalPlayersToLoad || !audioPlayer) return;
+    duration = audioPlayer.getDuration();
+    videoReady = true;
+    try { audioPlayer.pauseVideo(); } catch (err) {}
+    tilePlayers.forEach((player) => {
+      try {
+        player.pauseVideo();
+        player.seekTo(0, true);
+      } catch (err) {}
+    });
+    syncAudioToggle();
+    hideLoadingState();
+    drawPuzzle();
+    runCountdown(requestPlaybackStart);
+  }
+
+  function buildTilePlayers() {
+    const blank = gridSize * gridSize - 1;
+    const ts = PUZZLE_SIZE / gridSize;
+    tilePlayers = [];
+    tileElements = [];
+
+    for (let tile = 0; tile < blank; tile++) {
+      const sourceRow = Math.floor(tile / gridSize);
+      const sourceCol = tile % gridSize;
+
+      const tileEl = document.createElement('div');
+      tileEl.className = 'video-tile';
+
+      const viewport = document.createElement('div');
+      viewport.className = 'video-tile-viewport';
+
+      const host = document.createElement('div');
+      host.className = 'video-tile-host';
+      host.id = 'tile-player-' + tile;
+      host.style.width = PUZZLE_SIZE + 'px';
+      host.style.height = PUZZLE_SIZE + 'px';
+      host.style.transform = `translate(${-sourceCol * ts}px, ${-sourceRow * ts}px)`;
+
+      viewport.appendChild(host);
+      tileEl.appendChild(viewport);
+      $tileLayer.appendChild(tileEl);
+      tileElements[tile] = tileEl;
+
+      const player = new YT.Player(host.id, {
+        host: 'https://www.youtube-nocookie.com',
+        videoId: videoId,
+        width: PUZZLE_SIZE,
+        height: PUZZLE_SIZE,
+        playerVars: {
+          autoplay: 0, controls: 0, disablekb: 1, modestbranding: 1,
+          rel: 0, showinfo: 0, iv_load_policy: 3, fs: 0, playsinline: 1,
+          enablejsapi: 1, origin: window.location.origin,
+        },
+        events: {
+          onReady: (e) => {
+            try {
+              e.target.mute();
+              e.target.pauseVideo();
+            } catch (err) {}
+            handlePlayerReady();
+          },
+          onError: () => {
+            showVideoError('This video could not be embedded. Try another public YouTube link.');
+          }
+        }
+      });
+
+      tilePlayers.push(player);
+    }
+  }
+
+  function startSyncLoop() {
+    stopSyncLoop();
+    syncIntervalId = window.setInterval(() => {
+      if (!audioPlayer || gameState !== 'playing') return;
+      let currentTime = 0;
+      try {
+        currentTime = audioPlayer.getCurrentTime();
+      } catch (err) {
+        return;
+      }
+      tilePlayers.forEach((player) => {
+        try {
+          const state = player.getPlayerState();
+          const drift = Math.abs(player.getCurrentTime() - currentTime);
+          if (state !== YT.PlayerState.PLAYING) player.playVideo();
+          if (drift > 0.35) player.seekTo(currentTime, true);
+        } catch (err) {}
+      });
+    }, 1000);
   }
 
   // ── Solvable shuffle ──
@@ -1248,7 +1439,7 @@
     clearCountdownTimers();
     $countdown.style.display = 'flex';
     const steps = [
-      { text: '3', className: 'countdown-number', hint: 'Study the board…', duration: 900 },
+      { text: '3', className: 'countdown-number', hint: '', duration: 900 },
       { text: '2', className: 'countdown-number', hint: '', duration: 900 },
       { text: '1', className: 'countdown-number', hint: '', duration: 900 },
       { text: 'GO!', className: 'countdown-go', hint: '', duration: 600 },
@@ -1311,7 +1502,7 @@
   }
 
   function requestPlaybackStart() {
-    if (!puzzlePlayer) return;
+    if (!audioPlayer) return;
     clearCountdownTimers();
     clearCountdownOverlay();
     awaitingPlaybackStart = true;
@@ -1319,40 +1510,36 @@
     startTime = null;
 
     try {
-      puzzlePlayer.seekTo(0, true);
-      puzzlePlayer.unMute();
-      puzzlePlayer.setVolume(100);
+      audioPlayer.seekTo(0, true);
+      audioPlayer.unMute();
+      audioPlayer.setVolume(100);
+      tilePlayers.forEach((player) => {
+        player.seekTo(0, true);
+        player.playVideo();
+      });
       syncAudioToggle();
-      puzzlePlayer.playVideo();
+      audioPlayer.playVideo();
     } catch (err) {
+      pauseAllPlayers();
       showSoundStartPrompt();
       return;
     }
 
     scheduleTimeout(() => {
       if (awaitingPlaybackStart && gameState === 'starting') {
+        pauseAllPlayers();
         showSoundStartPrompt();
       }
     }, 2200);
   }
 
-  let ytPlayerEl = null; // the actual iframe/div for the visible player
-  let puzzlePlayer = null;
-
-  function createVisiblePlayer() {
-    // Destroy previous
-    if (puzzlePlayer) { try { puzzlePlayer.destroy(); } catch(e){} puzzlePlayer = null; }
-    // Remove old iframe if any
-    const old = document.getElementById('puzzle-yt');
-    if (old) old.remove();
-
-    const div = document.createElement('div');
-    div.id = 'puzzle-yt';
-    div.style.cssText = `position:absolute;top:0;left:0;width:${PUZZLE_SIZE}px;height:${PUZZLE_SIZE}px;z-index:0;border-radius:8px;overflow:hidden;`;
-    $puzzleWrap.insertBefore(div, $canvas);
-    syncAudioToggle();
-
-    puzzlePlayer = new YT.Player('puzzle-yt', {
+  function createPuzzlePlayers() {
+    destroyPuzzlePlayers();
+    setLoadingState('Loading video tiles…');
+    totalPlayersToLoad = gridSize * gridSize;
+    playersReady = 0;
+    buildTilePlayers();
+    audioPlayer = new YT.Player('yt-player', {
       host: 'https://www.youtube-nocookie.com',
       videoId: videoId,
       width: PUZZLE_SIZE,
@@ -1364,16 +1551,11 @@
       },
       events: {
         onReady: (e) => {
-          duration = e.target.getDuration();
-          videoReady = true;
           e.target.unMute();
           e.target.setVolume(100);
           e.target.pauseVideo();
           syncAudioToggle();
-          hideLoadingState();
-          // Draw the initial scrambled board so player can study it
-          drawPuzzle();
-          runCountdown(requestPlaybackStart);
+          handlePlayerReady();
         },
         onStateChange: (e) => {
           if (e.data === YT.PlayerState.PLAYING && gameState === 'starting') {
@@ -1383,6 +1565,7 @@
             startTime = Date.now();
             gameState = 'playing';
             syncAudioToggle();
+            startSyncLoop();
             startGameLoop();
             return;
           }
@@ -1404,6 +1587,8 @@
     const size = PUZZLE_SIZE;
     const ts = size / gridSize;
     const blank = gridSize * gridSize - 1;
+
+    updateTileLayout();
 
     ctx.clearRect(0, 0, size, size);
 
@@ -1619,7 +1804,8 @@
     awaitingPlaybackStart = false;
     cancelAnimationFrame(rafId);
     clearCountdownTimers();
-    if (puzzlePlayer) try { puzzlePlayer.pauseVideo(); } catch(e){}
+    stopSyncLoop();
+    pauseAllPlayers();
 
     // Final draw
     drawPuzzle();
@@ -1753,7 +1939,7 @@
           clearTimeout(bootTimerId);
           bootTimerId = null;
         }
-        createVisiblePlayer();
+        createPuzzlePlayers();
       } else {
         bootTimerId = setTimeout(boot, 150);
       }
@@ -1772,14 +1958,13 @@
     clearCountdownTimers();
     awaitingPlaybackStart = false;
     pointerStart = null;
+    stopSyncLoop();
     if (bootTimerId) {
       clearTimeout(bootTimerId);
       bootTimerId = null;
     }
-    if (puzzlePlayer) { try { puzzlePlayer.destroy(); } catch(e){} puzzlePlayer = null; }
+    destroyPuzzlePlayers();
     syncAudioToggle();
-    const old = document.getElementById('puzzle-yt');
-    if (old) old.remove();
     clearCountdownOverlay();
     hideLoadingState();
     // Clear URL params
