@@ -915,7 +915,7 @@
         </span>
       </button>
 
-      <p class="launch-note">Audio is on by default. If a browser blocks autoplay, one extra tap resumes the round with sound.</p>
+      <p class="launch-note">After the countdown, tap once to start the round with sound.</p>
     </div>
 
     <div class="how-to">
@@ -1269,7 +1269,7 @@
     syncAudioToggle();
     hideLoadingState();
     drawPuzzle();
-    runCountdown(requestPlaybackStart);
+    runCountdown(showStartPrompt);
   }
 
   function buildTilePlayers() {
@@ -1489,7 +1489,7 @@
     showStep();
   }
 
-  function showSoundStartPrompt() {
+  function showStartPrompt() {
     awaitingPlaybackStart = false;
     gameState = 'idle';
     syncAudioToggle();
@@ -1498,16 +1498,16 @@
 
     const title = document.createElement('div');
     title.className = 'countdown-go';
-    title.textContent = 'AUDIO';
+    title.textContent = 'GO';
 
     const note = document.createElement('div');
     note.className = 'countdown-note';
-    note.textContent = 'Your browser blocked sound on the delayed start. Tap once to kick off the round with audio.';
+    note.textContent = 'Tap once to start the round with sound.';
 
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'countdown-cta';
-    button.textContent = 'Start with sound';
+    button.textContent = 'Start round';
     button.addEventListener('click', requestPlaybackStart, { once: true });
 
     $countdown.appendChild(title);
@@ -1535,14 +1535,14 @@
       audioPlayer.playVideo();
     } catch (err) {
       pauseAllPlayers();
-      showSoundStartPrompt();
+      showStartPrompt();
       return;
     }
 
     scheduleTimeout(() => {
       if (awaitingPlaybackStart && gameState === 'starting') {
         pauseAllPlayers();
-        showSoundStartPrompt();
+        showStartPrompt();
       }
     }, 2200);
   }
