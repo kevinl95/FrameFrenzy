@@ -1423,7 +1423,7 @@
 
   // ── Canvas rendering ──
   // Single YT player behind a transparent canvas overlay.
-  // Canvas draws: grid lines, tile numbers/hues, blank mask, correct-tile glow.
+  // Canvas draws: grid lines, tile tints, blank mask, correct-tile glow.
   // Video plays underneath — tiles are tracked by number + color.
 
   const TILE_HUES = [];
@@ -1621,21 +1621,6 @@
         ctx.strokeRect(x + 1.5, y + 1.5, ts - 3, ts - 3);
       }
 
-      // Tile number
-      const fontSize = ts < 60 ? 11 : ts < 80 ? 14 : 17;
-      ctx.font = `700 ${fontSize}px 'IBM Plex Mono', monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillText(tile + 1, x + ts / 2 + 1, y + ts / 2 + 1);
-
-      // Number with tile hue
-      ctx.fillStyle = isCorrect
-        ? 'rgba(45,212,160,0.95)'
-        : `hsla(${hue}, 80%, 75%, 0.9)`;
-      ctx.fillText(tile + 1, x + ts / 2, y + ts / 2);
     }
 
     // Grid lines
