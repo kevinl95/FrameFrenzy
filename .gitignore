@@ -137,3 +137,14 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Generated site assets
+framefrenzy.zip
+og-card.png
+og-card.svg
+itch-background.png
+itch-background.svg
+itch-banner.png
+itch-banner.svg
+itch-embed-bg.png
+itch-embed-bg.svg
