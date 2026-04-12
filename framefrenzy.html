@@ -111,22 +111,6 @@
     overflow: hidden;
   }
 
-  .logo-area::before {
-    content: 'FRAME DESYNC CHALLENGE';
-    position: absolute;
-    top: 26px;
-    right: -38px;
-    padding: 8px 44px;
-    background: var(--accent);
-    color: #072019;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    transform: rotate(28deg);
-    box-shadow: 0 14px 30px rgba(0,0,0,0.25);
-  }
-
   .hero-chip {
     align-self: flex-start;
     padding: 8px 12px;
@@ -194,6 +178,20 @@
     background: rgba(119, 242, 204, 0.12);
     color: var(--accent);
     border-color: rgba(119, 242, 204, 0.2);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+  }
+
+  .stage-audio:hover {
+    background: rgba(255, 90, 54, 0.14);
+    color: var(--paper);
+    border-color: rgba(255, 90, 54, 0.24);
+  }
+
+  .stage-audio.muted {
+    background: rgba(255, 90, 54, 0.14);
+    color: #ffc3b4;
+    border-color: rgba(255, 90, 54, 0.24);
   }
 
   .start-sidebar {
@@ -225,7 +223,7 @@
   }
 
   .launch-panel::before {
-    content: 'QUEUE A LINK';
+    content: 'PASTE A LINK';
     position: absolute;
     top: -14px;
     left: 18px;
@@ -775,11 +773,6 @@
       padding: 26px 22px 22px;
     }
 
-    .logo-area::before {
-      right: -54px;
-      top: 18px;
-    }
-
     .start-sidebar {
       padding-top: 0;
     }
@@ -843,7 +836,6 @@
 
 <div id="start-screen">
   <section class="logo-area">
-    <div class="hero-chip">Live video slider</div>
     <div class="logo-icon">🧩</div>
     <h1 class="logo-text">Frame Frenzy</h1>
     <p class="tagline">Turn a YouTube clip into a loud, live sliding puzzle. The footage keeps moving while you chase the image back into place.</p>
@@ -919,7 +911,7 @@
     <div class="stage-panel">
       <div class="stage-labels">
         <span class="stage-tag">Live board</span>
-        <span class="stage-audio">Sound on</span>
+        <button type="button" class="stage-audio" id="audio-toggle" aria-pressed="true">Sound on</button>
       </div>
 
       <div class="puzzle-wrap" id="puzzle-wrap">
@@ -1008,6 +1000,7 @@
   const $shareText = document.getElementById('share-text');
   const $shareBtn = document.getElementById('share-btn');
   const $replayBtn = document.getElementById('replay-btn');
+  const $audioToggle = document.getElementById('audio-toggle');
 
   // ── Helpers ──
   function extractVideoId(url) {
@@ -1116,6 +1109,39 @@
     window.setTimeout(() => {
       $shareBtn.textContent = '📋 Copy Result';
     }, 2200);
+  }
+
+  function isSolved() {
+    return tiles.length > 0 && tiles.every((value, index) => value === index);
+  }
+
+  function syncAudioToggle() {
+    if (!puzzlePlayer) {
+      $audioToggle.textContent = 'Sound on';
+      $audioToggle.classList.remove('muted');
+      $audioToggle.setAttribute('aria-pressed', 'true');
+      return;
+    }
+
+    const muted = typeof puzzlePlayer.isMuted === 'function' ? puzzlePlayer.isMuted() : false;
+    $audioToggle.textContent = muted ? 'Sound off' : 'Sound on';
+    $audioToggle.classList.toggle('muted', muted);
+    $audioToggle.setAttribute('aria-pressed', muted ? 'false' : 'true');
+  }
+
+  function toggleAudio() {
+    if (!puzzlePlayer) return;
+    try {
+      if (puzzlePlayer.isMuted()) {
+        puzzlePlayer.unMute();
+        puzzlePlayer.setVolume(100);
+      } else {
+        puzzlePlayer.mute();
+      }
+    } catch (err) {
+      return;
+    }
+    syncAudioToggle();
   }
 
   // ── Solvable shuffle ──
@@ -1261,6 +1287,7 @@
   function showSoundStartPrompt() {
     awaitingPlaybackStart = false;
     gameState = 'idle';
+    syncAudioToggle();
     $countdown.style.display = 'flex';
     $countdown.innerHTML = '';
 
@@ -1295,6 +1322,7 @@
       puzzlePlayer.seekTo(0, true);
       puzzlePlayer.unMute();
       puzzlePlayer.setVolume(100);
+      syncAudioToggle();
       puzzlePlayer.playVideo();
     } catch (err) {
       showSoundStartPrompt();
@@ -1322,6 +1350,7 @@
     div.id = 'puzzle-yt';
     div.style.cssText = `position:absolute;top:0;left:0;width:${PUZZLE_SIZE}px;height:${PUZZLE_SIZE}px;z-index:0;border-radius:8px;overflow:hidden;`;
     $puzzleWrap.insertBefore(div, $canvas);
+    syncAudioToggle();
 
     puzzlePlayer = new YT.Player('puzzle-yt', {
       host: 'https://www.youtube-nocookie.com',
@@ -1340,6 +1369,7 @@
           e.target.unMute();
           e.target.setVolume(100);
           e.target.pauseVideo();
+          syncAudioToggle();
           hideLoadingState();
           // Draw the initial scrambled board so player can study it
           drawPuzzle();
@@ -1352,8 +1382,12 @@
             clearCountdownOverlay();
             startTime = Date.now();
             gameState = 'playing';
+            syncAudioToggle();
             startGameLoop();
             return;
+          }
+          if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.PLAYING) {
+            syncAudioToggle();
           }
           if (e.data === YT.PlayerState.ENDED && gameState === 'playing') {
             endGame(false);
@@ -1467,6 +1501,12 @@
         return;
       }
 
+      if (isSolved()) {
+        winTime = (Date.now() - startTime) / 1000;
+        endGame(true);
+        return;
+      }
+
       drawPuzzle();
       rafId = requestAnimationFrame(loop);
     }
@@ -1491,7 +1531,7 @@
     [tiles[idx], tiles[bi]] = [tiles[bi], tiles[idx]];
     moves++;
     // Check win
-    if (tiles.every((v, i) => v === i)) {
+    if (isSolved()) {
       winTime = (Date.now() - startTime) / 1000;
       endGame(true);
     }
@@ -1737,6 +1777,7 @@
       bootTimerId = null;
     }
     if (puzzlePlayer) { try { puzzlePlayer.destroy(); } catch(e){} puzzlePlayer = null; }
+    syncAudioToggle();
     const old = document.getElementById('puzzle-yt');
     if (old) old.remove();
     clearCountdownOverlay();
@@ -1756,6 +1797,7 @@
     $urlError.style.display = 'none';
     $urlInput.classList.remove('error');
   });
+  $audioToggle.addEventListener('click', toggleAudio);
   $backBtn.addEventListener('click', resetGame);
   $replayBtn.addEventListener('click', () => {
     $result.style.display = 'none';
