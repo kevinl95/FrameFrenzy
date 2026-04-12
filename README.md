@@ -17,7 +17,7 @@ Then open `http://localhost:8000/framefrenzy.html`.
 ## Browser compatibility notes
 
 - Touch input now uses Pointer Events when available, with a touch fallback for older mobile browsers.
-- Video playback is muted for better autoplay compatibility on mobile browsers and embedded contexts.
+- Video playback now tries to start with sound on by default. If a browser blocks delayed autoplay with audio, the game shows a one-tap resume prompt.
 - Clipboard sharing falls back to `document.execCommand('copy')` when the async Clipboard API is unavailable.
 - The app respects `prefers-reduced-motion` and no longer disables zoom at the viewport level.
 - Some YouTube videos still cannot be embedded because the video owner disables playback in iframes. That is a platform restriction, not an app bug.
@@ -29,9 +29,11 @@ The repository includes a GitHub Actions workflow at [.github/workflows/deploy-c
 Set these before enabling the workflow:
 
 1. Create a Cloudflare Pages project for this repo.
-2. Add a GitHub repository variable named `CLOUDFLARE_PAGES_PROJECT` with the Pages project name.
+2. Add `CLOUDFLARE_PAGES_PROJECT` as a GitHub repository variable. The workflow also accepts it as a repository secret if you prefer, but a variable is the intended default.
 3. Add a GitHub secret named `CLOUDFLARE_ACCOUNT_ID` with your Cloudflare account ID.
 4. Add a GitHub secret named `CLOUDFLARE_API_TOKEN` with a token that can deploy Pages projects.
+
+Important: these are repository-level settings, not environment secrets, unless you explicitly attach this workflow to a GitHub environment and want to scope them there.
 
 Recommended token scopes:
 
