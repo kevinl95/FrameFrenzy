@@ -1112,6 +1112,23 @@
     window.history.replaceState(null, '', url);
   }
 
+  function getCanonicalAppUrl() {
+    const url = new URL(window.location.href);
+    let pathname = url.pathname;
+    pathname = pathname.replace(/(?:\/index\.html|\/framefrenzy\.html|\/framefrenzy)$/, '/');
+    pathname = pathname.replace(/\/+/g, '/');
+    if (!pathname.endsWith('/')) pathname += '/';
+    url.pathname = pathname;
+    return url;
+  }
+
+  function normalizeCurrentRoute() {
+    const canonical = getCanonicalAppUrl();
+    canonical.search = window.location.search;
+    canonical.hash = window.location.hash;
+    safeReplaceState(canonical);
+  }
+
   function resetCanvasScale(size) {
     const dpr = window.devicePixelRatio || 1;
     $canvas.width = size * dpr;
@@ -1404,12 +1421,14 @@
   }
 
   function buildChallengeUrl() {
-    const base = window.location.origin + window.location.pathname;
-    return base + '?v=' + videoId + '&g=' + gridSize;
+    const url = getCanonicalAppUrl();
+    url.searchParams.set('v', videoId);
+    url.searchParams.set('g', gridSize);
+    return url.toString();
   }
 
   function pushParams() {
-    const url = new URL(window.location);
+    const url = getCanonicalAppUrl();
     url.searchParams.set('v', videoId);
     url.searchParams.set('g', gridSize);
     safeReplaceState(url);
@@ -1991,6 +2010,7 @@
   // ── Init ──
   renderSizeBtns();
   readParams();
+  normalizeCurrentRoute();
   renderSizeBtns(); // re-render with possibly updated gridSize
 
   // Auto-start if URL params present

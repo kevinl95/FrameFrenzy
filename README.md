@@ -27,7 +27,7 @@ Winners get a copyable/sharable they can use to challenge their friends:
 🟩🟩🟩
 🟩🟩🟩
 🟩🟩⬛
-https://framefrenzy.games/framefrenzy?v=E4WlUXrJgy4&g=3
+https://framefrenzy.games/?v=E4WlUXrJgy4&g=3
 
 ## Notes
 
