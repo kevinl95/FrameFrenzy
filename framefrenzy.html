@@ -159,6 +159,7 @@
   }
 
   .hero-rules span,
+  .hero-rules button,
   .stage-tag,
   .stage-audio {
     display: inline-flex;
@@ -174,20 +175,27 @@
     text-transform: uppercase;
   }
 
+  .hero-rules button {
+    appearance: none;
+    cursor: pointer;
+  }
+
+  .hero-rules button,
   .stage-audio {
     background: rgba(119, 242, 204, 0.12);
     color: var(--accent);
     border-color: rgba(119, 242, 204, 0.2);
-    cursor: pointer;
     transition: background 0.2s, color 0.2s, border-color 0.2s;
   }
 
+  .hero-rules button:hover,
   .stage-audio:hover {
     background: rgba(255, 90, 54, 0.14);
     color: var(--paper);
     border-color: rgba(255, 90, 54, 0.24);
   }
 
+  .hero-rules button.muted,
   .stage-audio.muted {
     background: rgba(255, 90, 54, 0.14);
     color: #ffc3b4;
@@ -886,9 +894,8 @@
     <h1 class="logo-text">Frame Frenzy</h1>
     <p class="tagline">Turn a YouTube clip into a loud, live sliding puzzle. The footage keeps moving while you chase the image back into place.</p>
     <div class="hero-rules">
-      <span>Sound on</span>
+      <button type="button" id="start-audio-toggle" aria-pressed="true">Sound on</button>
       <span>No pause</span>
-      <span>Beat the cut</span>
     </div>
   </section>
 
@@ -913,7 +920,7 @@
         </span>
       </button>
 
-      <p class="launch-note">After the countdown, tap once to start the round</p>
+      <p class="launch-note">Choose your sound setting here, then tap once after the countdown to start the round.</p>
     </div>
 
     <div class="how-to">
@@ -1019,6 +1026,7 @@
   let bootTimerId = null;
   let pointerStart = null;
   let awaitingPlaybackStart = false;
+  let audioEnabled = true;
   let audioPlayer = null;
   let tilePlayers = [];
   let tileElements = [];
@@ -1054,6 +1062,7 @@
   const $shareBtn = document.getElementById('share-btn');
   const $replayBtn = document.getElementById('replay-btn');
   const $audioToggle = document.getElementById('audio-toggle');
+  const $startAudioToggle = document.getElementById('start-audio-toggle');
 
   // ── Helpers ──
   function extractVideoId(url) {
@@ -1187,30 +1196,34 @@
   }
 
   function syncAudioToggle() {
-    if (!audioPlayer) {
-      $audioToggle.textContent = 'Sound on';
-      $audioToggle.classList.remove('muted');
-      $audioToggle.setAttribute('aria-pressed', 'true');
-      return;
-    }
+    const soundOn = audioPlayer && typeof audioPlayer.isMuted === 'function'
+      ? !audioPlayer.isMuted()
+      : audioEnabled;
 
-    const muted = typeof audioPlayer.isMuted === 'function' ? audioPlayer.isMuted() : false;
-    $audioToggle.textContent = muted ? 'Sound off' : 'Sound on';
-    $audioToggle.classList.toggle('muted', muted);
-    $audioToggle.setAttribute('aria-pressed', muted ? 'false' : 'true');
+    $audioToggle.textContent = soundOn ? 'Sound on' : 'Sound off';
+    $audioToggle.classList.toggle('muted', !soundOn);
+    $audioToggle.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+
+    if ($startAudioToggle) {
+      $startAudioToggle.textContent = soundOn ? 'Sound on' : 'Sound off';
+      $startAudioToggle.classList.toggle('muted', !soundOn);
+      $startAudioToggle.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
+    }
   }
 
   function toggleAudio() {
-    if (!audioPlayer) return;
+    audioEnabled = !audioEnabled;
     try {
-      if (audioPlayer.isMuted()) {
-        audioPlayer.unMute();
-        audioPlayer.setVolume(100);
-      } else {
-        audioPlayer.mute();
+      if (audioPlayer) {
+        if (audioEnabled) {
+          audioPlayer.unMute();
+          audioPlayer.setVolume(100);
+        } else {
+          audioPlayer.mute();
+        }
       }
     } catch (err) {
-      return;
+      audioEnabled = !audioEnabled;
     }
     syncAudioToggle();
   }
@@ -1580,7 +1593,9 @@
 
     const note = document.createElement('div');
     note.className = 'countdown-note';
-    note.textContent = 'Tap once to start the round with sound.';
+    note.textContent = audioEnabled
+      ? 'Tap once to start the round with sound.'
+      : 'Tap once to start the round muted.';
 
     const button = document.createElement('button');
     button.type = 'button';
@@ -1604,8 +1619,12 @@
 
     try {
       audioPlayer.seekTo(0, true);
-      audioPlayer.unMute();
-      audioPlayer.setVolume(100);
+      if (audioEnabled) {
+        audioPlayer.unMute();
+        audioPlayer.setVolume(100);
+      } else {
+        audioPlayer.mute();
+      }
       tilePlayers.forEach((player) => {
         player.seekTo(0, true);
         player.playVideo();
@@ -1648,8 +1667,12 @@
       },
       events: {
         onReady: (e) => {
-          e.target.unMute();
-          e.target.setVolume(100);
+          if (audioEnabled) {
+            e.target.unMute();
+            e.target.setVolume(100);
+          } else {
+            e.target.mute();
+          }
           e.target.pauseVideo();
           syncAudioToggle();
           handlePlayerReady();
@@ -2056,6 +2079,7 @@
     $urlError.style.display = 'none';
     $urlInput.classList.remove('error');
   });
+  $startAudioToggle.addEventListener('click', toggleAudio);
   $audioToggle.addEventListener('click', toggleAudio);
   $backBtn.addEventListener('click', resetGame);
   $replayBtn.addEventListener('click', () => {
@@ -2068,6 +2092,7 @@
   readParams();
   normalizeCurrentRoute();
   renderSizeBtns(); // re-render with possibly updated gridSize
+  syncAudioToggle();
 
   // Auto-start if URL params present
   if ($urlInput.value && extractVideoId($urlInput.value)) {
