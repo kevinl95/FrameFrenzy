@@ -24,20 +24,23 @@ Then open `http://localhost:8000/framefrenzy.html`.
 
 ## Cloudflare Pages deployment
 
-The repository includes a GitHub Actions workflow at [.github/workflows/deploy-cloudflare-pages.yml](.github/workflows/deploy-cloudflare-pages.yml). It deploys the repository root to Cloudflare Pages on pushes to `main` and on manual runs.
+This repo is a static site with no build step. If Cloudflare only offers you the Worker-style setup flow, this repository is now configured to deploy that way using static assets.
 
-Set these before enabling the workflow:
+Recommended settings:
 
-1. Create a Cloudflare Pages project for this repo.
-2. Add `CLOUDFLARE_PAGES_PROJECT` as a GitHub repository variable. The workflow also accepts it as a repository secret if you prefer, but a variable is the intended default.
-3. Add a GitHub secret named `CLOUDFLARE_ACCOUNT_ID` with your Cloudflare account ID.
-4. Add a GitHub secret named `CLOUDFLARE_API_TOKEN` with a token that can deploy Pages projects.
+1. Project name: `FrameFrenzy`
+2. Build command: leave it blank if Cloudflare allows it. If the field is required, use `exit 0`.
+3. Deploy command: `npx wrangler deploy`
+4. Root directory / path: `/` or `.` if the UI wants a relative path.
 
-Important: these are repository-level settings, not environment secrets, unless you explicitly attach this workflow to a GitHub environment and want to scope them there.
+About the deploy command field:
 
-Recommended token scopes:
+- If your logs say `Executing user deploy command`, you are in the Workers build flow, not the normal Pages static-site flow.
+- This repo now includes [wrangler.jsonc](wrangler.jsonc), which tells Wrangler to deploy the repository as a static-assets Worker.
+- Because of that config file, `npx wrangler deploy` is now the correct deploy command in the Worker setup flow.
+- Do not use `npx wrangler deploy .` for this repo.
 
-- `Cloudflare Pages:Edit`
-- `Account:Read`
+Notes:
 
-If your default branch is not `main`, update the branch trigger in [.github/workflows/deploy-cloudflare-pages.yml](.github/workflows/deploy-cloudflare-pages.yml).
+- The Worker name in the dashboard should match the `name` field in [wrangler.jsonc](wrangler.jsonc), which is `FrameFrenzy`.
+- The repository now includes [index.html](index.html) so the root URL resolves correctly and redirects to [framefrenzy.html](framefrenzy.html).
