@@ -1419,23 +1419,41 @@
   // ── URL params ──
   function readParams() {
     const p = new URLSearchParams(window.location.search);
-    const v = p.get('v');
-    const g = parseInt(p.get('g'), 10);
-    if (v) $urlInput.value = 'https://youtube.com/watch?v=' + v;
-    if (GRID_SIZES.includes(g)) gridSize = g;
+    const legacyVideoParam = p.get('v');
+    const videoParam = p.get('video');
+    const legacyGridParam = parseInt(p.get('g'), 10);
+    const gridParam = parseInt(p.get('grid'), 10);
+    const resolvedVideoId = extractVideoId(videoParam) || extractVideoId(legacyVideoParam);
+    const resolvedGrid = GRID_SIZES.includes(gridParam)
+      ? gridParam
+      : GRID_SIZES.includes(legacyGridParam)
+        ? legacyGridParam
+        : null;
+
+    if (resolvedVideoId) {
+      $urlInput.value = 'https://youtube.com/watch?v=' + resolvedVideoId;
+    }
+
+    if (resolvedGrid) {
+      gridSize = resolvedGrid;
+    }
   }
 
   function buildChallengeUrl() {
     const url = getCanonicalAppUrl();
-    url.searchParams.set('v', videoId);
-    url.searchParams.set('g', gridSize);
+    url.searchParams.delete('v');
+    url.searchParams.delete('g');
+    url.searchParams.set('video', videoId);
+    url.searchParams.set('grid', gridSize);
     return url.toString();
   }
 
   function pushParams() {
     const url = getCanonicalAppUrl();
-    url.searchParams.set('v', videoId);
-    url.searchParams.set('g', gridSize);
+    url.searchParams.delete('v');
+    url.searchParams.delete('g');
+    url.searchParams.set('video', videoId);
+    url.searchParams.set('grid', gridSize);
     safeReplaceState(url);
   }
 
@@ -1982,6 +2000,8 @@
     hideLoadingState();
     // Clear URL params
     const url = new URL(window.location);
+    url.searchParams.delete('video');
+    url.searchParams.delete('grid');
     url.searchParams.delete('v');
     url.searchParams.delete('g');
     safeReplaceState(url);
