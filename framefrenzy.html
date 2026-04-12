@@ -522,7 +522,6 @@
     cursor: pointer;
     touch-action: manipulation;
     align-self: flex-start;
-    clip-path: polygon(0 0, calc(100% - 32px) 0, 100% 32px, 100% 100%, 32px 100%, 0 calc(100% - 32px));
   }
 
   #tile-layer {
@@ -911,11 +910,10 @@
         <span class="play-icon">▶</span>
         <span class="play-copy">
           <strong>Drop In</strong>
-          <span>Launch the board with sound</span>
         </span>
       </button>
 
-      <p class="launch-note">After the countdown, tap once to start the round with sound.</p>
+      <p class="launch-note">After the countdown, tap once to start the round</p>
     </div>
 
     <div class="how-to">
@@ -1027,6 +1025,7 @@
   let playersReady = 0;
   let totalPlayersToLoad = 0;
   let syncIntervalId = null;
+  let startPollId = null;
 
   // ── DOM refs ──
   const $start = document.getElementById('start-screen');
@@ -1223,6 +1222,13 @@
     }
   }
 
+  function stopStartPoll() {
+    if (startPollId) {
+      clearInterval(startPollId);
+      startPollId = null;
+    }
+  }
+
   function pauseAllPlayers() {
     if (audioPlayer) {
       try { audioPlayer.pauseVideo(); } catch (err) {}
@@ -1234,6 +1240,7 @@
 
   function destroyPuzzlePlayers() {
     stopSyncLoop();
+    stopStartPoll();
     if (audioPlayer) {
       try { audioPlayer.destroy(); } catch (err) {}
       audioPlayer = null;
@@ -1364,6 +1371,58 @@
         } catch (err) {}
       });
     }, 1000);
+  }
+
+  function areTilePlayersReadyForReveal() {
+    if (tilePlayers.length === 0) return false;
+    return tilePlayers.every((player) => {
+      try {
+        const state = player.getPlayerState();
+        return state === YT.PlayerState.PLAYING ||
+          state === YT.PlayerState.BUFFERING ||
+          player.getCurrentTime() > 0.05;
+      } catch (err) {
+        return false;
+      }
+    });
+  }
+
+  function showSyncingOverlay() {
+    $countdown.style.display = 'flex';
+    $countdown.innerHTML = '';
+
+    const title = document.createElement('div');
+    title.className = 'countdown-go';
+    title.textContent = 'GO';
+
+    const note = document.createElement('div');
+    note.className = 'countdown-note';
+    note.textContent = 'Syncing the board...';
+
+    $countdown.appendChild(title);
+    $countdown.appendChild(note);
+  }
+
+  function maybeEnterPlayingState() {
+    if (!audioPlayer || gameState !== 'starting') return;
+    let audioState;
+    try {
+      audioState = audioPlayer.getPlayerState();
+    } catch (err) {
+      return;
+    }
+    if (audioState !== YT.PlayerState.PLAYING && audioState !== YT.PlayerState.BUFFERING) return;
+    if (!areTilePlayersReadyForReveal()) return;
+
+    awaitingPlaybackStart = false;
+    stopStartPoll();
+    clearCountdownTimers();
+    clearCountdownOverlay();
+    startTime = Date.now();
+    gameState = 'playing';
+    syncAudioToggle();
+    startSyncLoop();
+    startGameLoop();
   }
 
   // ── Solvable shuffle ──
@@ -1537,7 +1596,8 @@
   function requestPlaybackStart() {
     if (!audioPlayer) return;
     clearCountdownTimers();
-    clearCountdownOverlay();
+    stopStartPoll();
+    showSyncingOverlay();
     awaitingPlaybackStart = true;
     gameState = 'starting';
     startTime = null;
@@ -1558,8 +1618,12 @@
       return;
     }
 
+    startPollId = window.setInterval(maybeEnterPlayingState, 120);
+    maybeEnterPlayingState();
+
     scheduleTimeout(() => {
       if (awaitingPlaybackStart && gameState === 'starting') {
+        stopStartPoll();
         pauseAllPlayers();
         showStartPrompt();
       }
@@ -1591,17 +1655,7 @@
           handlePlayerReady();
         },
         onStateChange: (e) => {
-          if (e.data === YT.PlayerState.PLAYING && gameState === 'starting') {
-            awaitingPlaybackStart = false;
-            clearCountdownTimers();
-            clearCountdownOverlay();
-            startTime = Date.now();
-            gameState = 'playing';
-            syncAudioToggle();
-            startSyncLoop();
-            startGameLoop();
-            return;
-          }
+          if (gameState === 'starting') maybeEnterPlayingState();
           if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.PLAYING) {
             syncAudioToggle();
           }
@@ -1822,6 +1876,7 @@
     awaitingPlaybackStart = false;
     cancelAnimationFrame(rafId);
     clearCountdownTimers();
+    stopStartPoll();
     stopSyncLoop();
     pauseAllPlayers();
 
@@ -1976,6 +2031,7 @@
     clearCountdownTimers();
     awaitingPlaybackStart = false;
     pointerStart = null;
+    stopStartPoll();
     stopSyncLoop();
     if (bootTimerId) {
       clearTimeout(bootTimerId);
