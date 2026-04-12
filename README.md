@@ -1,6 +1,6 @@
 # FrameFrenzy
 
-Frame Frenzy is a brwoser game that turns a YouTube video into a sliding puzzle.
+Frame Frenzy is a browser game that turns a YouTube video into a sliding puzzle.
 
 The clip keeps playing. The board is scrambled. You have to rebuild the image before the video runs out!
 
