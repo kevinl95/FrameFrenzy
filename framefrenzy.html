@@ -1415,7 +1415,7 @@
 
   // ── Screen transitions ──
   function showScreen(name) {
-    $start.style.display = name === 'start' ? 'flex' : 'none';
+    $start.style.display = name === 'start' ? 'grid' : 'none';
     $game.style.display = name === 'game' ? 'flex' : 'none';
     $result.style.display = name === 'result' ? 'flex' : 'none';
     if (name === 'game') $game.style.animation = 'fadeUp 0.4s ease both';
