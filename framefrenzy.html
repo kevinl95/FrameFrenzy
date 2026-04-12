@@ -151,15 +151,6 @@
     line-height: 1.45;
   }
 
-  .hero-rules {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-top: auto;
-  }
-
-  .hero-rules span,
-  .hero-rules button,
   .stage-tag,
   .stage-audio {
     display: inline-flex;
@@ -173,33 +164,6 @@
     font-size: 0.78rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-  }
-
-  .hero-rules button {
-    appearance: none;
-    cursor: pointer;
-  }
-
-  .hero-rules button,
-  .stage-audio {
-    background: rgba(119, 242, 204, 0.12);
-    color: var(--accent);
-    border-color: rgba(119, 242, 204, 0.2);
-    transition: background 0.2s, color 0.2s, border-color 0.2s;
-  }
-
-  .hero-rules button:hover,
-  .stage-audio:hover {
-    background: rgba(255, 90, 54, 0.14);
-    color: var(--paper);
-    border-color: rgba(255, 90, 54, 0.24);
-  }
-
-  .hero-rules button.muted,
-  .stage-audio.muted {
-    background: rgba(255, 90, 54, 0.14);
-    color: #ffc3b4;
-    border-color: rgba(255, 90, 54, 0.24);
   }
 
   .start-sidebar {
@@ -893,10 +857,6 @@
     <div class="logo-icon">🧩</div>
     <h1 class="logo-text">Frame Frenzy</h1>
     <p class="tagline">Turn a YouTube clip into a loud, live sliding puzzle. The footage keeps moving while you chase the image back into place.</p>
-    <div class="hero-rules">
-      <button type="button" id="start-audio-toggle" aria-pressed="true">Sound on</button>
-      <span>No pause</span>
-    </div>
   </section>
 
   <div class="start-sidebar">
@@ -920,7 +880,7 @@
         </span>
       </button>
 
-      <p class="launch-note">Choose your sound setting here, then tap once after the countdown to start the round.</p>
+      <p class="launch-note">After the countdown, tap once to start the round.</p>
     </div>
 
     <div class="how-to">
@@ -963,7 +923,6 @@
     <div class="stage-panel">
       <div class="stage-labels">
         <span class="stage-tag">Live board</span>
-        <button type="button" class="stage-audio" id="audio-toggle" aria-pressed="true">Sound on</button>
       </div>
 
       <div class="puzzle-wrap" id="puzzle-wrap">
@@ -1026,7 +985,6 @@
   let bootTimerId = null;
   let pointerStart = null;
   let awaitingPlaybackStart = false;
-  let audioEnabled = true;
   let audioPlayer = null;
   let tilePlayers = [];
   let tileElements = [];
@@ -1061,8 +1019,6 @@
   const $shareText = document.getElementById('share-text');
   const $shareBtn = document.getElementById('share-btn');
   const $replayBtn = document.getElementById('replay-btn');
-  const $audioToggle = document.getElementById('audio-toggle');
-  const $startAudioToggle = document.getElementById('start-audio-toggle');
 
   // ── Helpers ──
   function extractVideoId(url) {
@@ -1195,39 +1151,6 @@
     return tiles.length > 0 && tiles.every((value, index) => value === index);
   }
 
-  function syncAudioToggle() {
-    const soundOn = audioPlayer && typeof audioPlayer.isMuted === 'function'
-      ? !audioPlayer.isMuted()
-      : audioEnabled;
-
-    $audioToggle.textContent = soundOn ? 'Sound on' : 'Sound off';
-    $audioToggle.classList.toggle('muted', !soundOn);
-    $audioToggle.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
-
-    if ($startAudioToggle) {
-      $startAudioToggle.textContent = soundOn ? 'Sound on' : 'Sound off';
-      $startAudioToggle.classList.toggle('muted', !soundOn);
-      $startAudioToggle.setAttribute('aria-pressed', soundOn ? 'true' : 'false');
-    }
-  }
-
-  function toggleAudio() {
-    audioEnabled = !audioEnabled;
-    try {
-      if (audioPlayer) {
-        if (audioEnabled) {
-          audioPlayer.unMute();
-          audioPlayer.setVolume(100);
-        } else {
-          audioPlayer.mute();
-        }
-      }
-    } catch (err) {
-      audioEnabled = !audioEnabled;
-    }
-    syncAudioToggle();
-  }
-
   function stopSyncLoop() {
     if (syncIntervalId) {
       clearInterval(syncIntervalId);
@@ -1268,7 +1191,6 @@
     const $audioHost = document.getElementById('yt-player');
     if ($audioHost) $audioHost.innerHTML = '';
     $tileLayer.innerHTML = '';
-    syncAudioToggle();
   }
 
   function updateTileLayout() {
@@ -1303,7 +1225,6 @@
         player.seekTo(0, true);
       } catch (err) {}
     });
-    syncAudioToggle();
     hideLoadingState();
     drawPuzzle();
     runCountdown(showStartPrompt);
@@ -1583,7 +1504,6 @@
   function showStartPrompt() {
     awaitingPlaybackStart = false;
     gameState = 'idle';
-    syncAudioToggle();
     $countdown.style.display = 'flex';
     $countdown.innerHTML = '';
 
@@ -1593,9 +1513,7 @@
 
     const note = document.createElement('div');
     note.className = 'countdown-note';
-    note.textContent = audioEnabled
-      ? 'Tap once to start the round with sound.'
-      : 'Tap once to start the round muted.';
+    note.textContent = 'Tap once to start the round with sound.';
 
     const button = document.createElement('button');
     button.type = 'button';
@@ -1619,17 +1537,12 @@
 
     try {
       audioPlayer.seekTo(0, true);
-      if (audioEnabled) {
-        audioPlayer.unMute();
-        audioPlayer.setVolume(100);
-      } else {
-        audioPlayer.mute();
-      }
+      audioPlayer.unMute();
+      audioPlayer.setVolume(100);
       tilePlayers.forEach((player) => {
         player.seekTo(0, true);
         player.playVideo();
       });
-      syncAudioToggle();
       audioPlayer.playVideo();
     } catch (err) {
       pauseAllPlayers();
@@ -1667,21 +1580,13 @@
       },
       events: {
         onReady: (e) => {
-          if (audioEnabled) {
-            e.target.unMute();
-            e.target.setVolume(100);
-          } else {
-            e.target.mute();
-          }
+          e.target.unMute();
+          e.target.setVolume(100);
           e.target.pauseVideo();
-          syncAudioToggle();
           handlePlayerReady();
         },
         onStateChange: (e) => {
           if (gameState === 'starting') maybeEnterPlayingState();
-          if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.PLAYING) {
-            syncAudioToggle();
-          }
           if (e.data === YT.PlayerState.ENDED && gameState === 'playing') {
             endGame(false);
           }
@@ -2061,7 +1966,6 @@
       bootTimerId = null;
     }
     destroyPuzzlePlayers();
-    syncAudioToggle();
     clearCountdownOverlay();
     hideLoadingState();
     // Clear URL params
@@ -2079,8 +1983,6 @@
     $urlError.style.display = 'none';
     $urlInput.classList.remove('error');
   });
-  $startAudioToggle.addEventListener('click', toggleAudio);
-  $audioToggle.addEventListener('click', toggleAudio);
   $backBtn.addEventListener('click', resetGame);
   $replayBtn.addEventListener('click', () => {
     $result.style.display = 'none';
@@ -2092,7 +1994,6 @@
   readParams();
   normalizeCurrentRoute();
   renderSizeBtns(); // re-render with possibly updated gridSize
-  syncAudioToggle();
 
   // Auto-start if URL params present
   if ($urlInput.value && extractVideoId($urlInput.value)) {
