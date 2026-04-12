@@ -28,7 +28,7 @@
     --dim: #d2ad8b;
     --border: rgba(255, 128, 84, 0.22);
     --line: rgba(255, 255, 255, 0.08);
-    --font-display: 'Bungee', cursive;
+    --font-display: 'Bungee', 'Arial Black', 'Helvetica Neue', sans-serif;
     --font-body: 'IBM Plex Sans', sans-serif;
     --font-mono: 'IBM Plex Mono', monospace;
   }
@@ -846,7 +846,21 @@
   }
 
   @media (max-width: 520px) {
-    .logo-text { font-size: 3rem; }
+    .logo-text {
+      font-family: var(--font-body);
+      font-size: 3rem;
+      font-weight: 700;
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+      max-width: none;
+    }
+    .play-copy strong,
+    .header-logo,
+    .result-title {
+      font-family: var(--font-body);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
     .size-row,
     .stats-row { grid-template-columns: 1fr 1fr; }
     .stat:last-child { grid-column: 1 / -1; }
