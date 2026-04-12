@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Frame Frenzy — Solve the puzzle before the video ends</title>
+<meta name="description" content="A scrambled YouTube video becomes a sliding puzzle. Solve it before the video ends and share your score."/>
+<meta property="og:title" content="Frame Frenzy"/>
+<meta property="og:description" content="Can you solve the sliding puzzle before the video ends?"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Righteous&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #06060c;
+    --surface: #0f0f1b;
+    --surface2: #171729;
+    --accent: #ff2d55;
+    --accent-glow: rgba(255,45,85,0.30);
+    --green: #2dd4a0;
+    --green-glow: rgba(45,212,160,0.25);
+    --yellow: #fbbf24;
+    --text: #eeeef2;
+    --dim: #6b6b80;
+    --border: #252538;
+    --font-display: 'Righteous', cursive;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow-x: hidden; }
+  body {
+    font-family: var(--font-mono);
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Scanline texture overlay */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.06) 2px,
+      rgba(0,0,0,0.06) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── Start Screen ── */
+  #start-screen {
+    max-width: 460px; width: 100%; padding: 48px 24px;
+    display: flex; flex-direction: column; gap: 28px;
+    animation: fadeUp 0.5s ease both;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .logo-area { text-align: center; }
+  .logo-icon {
+    font-size: 52px;
+    filter: drop-shadow(0 0 24px var(--accent-glow));
+    animation: float 3s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+  .logo-text {
+    font-family: var(--font-display); font-size: 46px;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, var(--accent), var(--yellow), var(--green));
+    background-size: 200% 200%;
+    animation: gradShift 4s ease infinite;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  @keyframes gradShift {
+    0%,100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  .tagline { color: var(--dim); font-size: 13px; margin-top: 8px; letter-spacing: 1.5px; }
+
+  .field-group { display: flex; flex-direction: column; gap: 8px; }
+  .field-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--dim);
+  }
+  .url-input {
+    background: var(--surface); border: 1.5px solid var(--border);
+    border-radius: 12px; padding: 14px 16px; font-size: 14px;
+    color: var(--text); font-family: var(--font-mono); outline: none;
+    transition: border-color 0.2s;
+  }
+  .url-input:focus { border-color: var(--accent); }
+  .url-input::placeholder { color: var(--dim); opacity: 0.5; }
+  .url-input.error { border-color: var(--accent); }
+  .error-msg { color: var(--accent); font-size: 11px; }
+
+  .size-row { display: flex; gap: 10px; }
+  .size-btn {
+    flex: 1; padding: 13px 0; border-radius: 10px;
+    border: 1.5px solid var(--border); background: var(--surface);
+    color: var(--dim); font-size: 15px; font-family: var(--font-mono);
+    font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .size-btn:hover { border-color: var(--accent); color: var(--text); }
+  .size-btn.active {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  .play-btn {
+    background: linear-gradient(135deg, var(--accent), #ff6b8a);
+    border: none; border-radius: 14px; padding: 16px 0;
+    font-size: 18px; font-family: var(--font-display);
+    color: #fff; cursor: pointer; letter-spacing: 4px;
+    box-shadow: 0 4px 28px var(--accent-glow);
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    transition: transform 0.12s, box-shadow 0.2s;
+  }
+  .play-btn:hover { transform: scale(1.02); box-shadow: 0 6px 36px var(--accent-glow); }
+  .play-btn:active { transform: scale(0.98); }
+
+  .how-to {
+    background: var(--surface2); border-radius: 12px;
+    padding: 16px 20px; border-left: 3px solid var(--accent);
+  }
+  .how-to-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 2.5px;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
+  }
+  .how-to p { font-size: 12.5px; line-height: 1.7; color: var(--dim); }
+
+  /* ── Game Screen ── */
+  #game-screen {
+    display: none; width: 100%; max-width: 500px;
+    flex-direction: column; align-items: center;
+    padding: 0 16px;
+    animation: fadeUp 0.4s ease both;
+  }
+  .game-header {
+    width: 100%; display: flex; align-items: center;
+    justify-content: space-between; padding: 12px 4px;
+  }
+  .back-btn {
+    background: none; border: none; color: var(--dim);
+    font-size: 13px; font-family: var(--font-mono); cursor: pointer;
+    padding: 6px 0; transition: color 0.15s;
+  }
+  .back-btn:hover { color: var(--text); }
+  .header-logo { font-family: var(--font-display); font-size: 15px; color: var(--dim); }
+
+  .timer-track {
+    width: 100%; height: 5px; border-radius: 3px;
+    background: var(--surface2); overflow: hidden; margin-bottom: 14px;
+  }
+  .timer-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 0.25s linear, background 0.5s;
+  }
+
+  .stats-row {
+    display: flex; justify-content: center; gap: 36px; margin-bottom: 14px;
+  }
+  .stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .stat-label { font-size: 9px; letter-spacing: 2.5px; color: var(--dim); font-weight: 700; }
+  .stat-value {
+    font-size: 22px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.3s;
+  }
+
+  .puzzle-wrap {
+    position: relative; border-radius: 8px;
+    box-shadow: 0 0 50px rgba(0,0,0,0.6), 0 0 0 1px var(--border);
+    overflow: hidden; cursor: pointer;
+    touch-action: none;
+  }
+  #puzzle-canvas { display: block; border-radius: 8px; }
+
+  .loading-overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: rgba(6,6,12,0.93); border-radius: 8px; z-index: 10;
+  }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { color: var(--dim); margin-top: 14px; font-size: 13px; }
+
+  /* ── Countdown Overlay ── */
+  #countdown-overlay {
+    display: none; position: absolute; inset: 0;
+    align-items: center; justify-content: center;
+    background: rgba(6,6,12,0.82); border-radius: 8px; z-index: 20;
+    flex-direction: column; gap: 8px;
+  }
+  .countdown-number {
+    font-family: var(--font-display); font-size: 96px;
+    color: var(--text); opacity: 0;
+    animation: countPop 0.85s cubic-bezier(0.34,1.56,0.64,1) forwards;
+    text-shadow: 0 0 40px var(--accent-glow), 0 0 80px rgba(255,45,85,0.15);
+  }
+  .countdown-go {
+    font-family: var(--font-display); font-size: 52px;
+    letter-spacing: 6px;
+    background: linear-gradient(135deg, var(--green), var(--yellow));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    opacity: 0;
+    animation: countPop 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards;
+    filter: drop-shadow(0 0 20px var(--green-glow));
+  }
+  .countdown-hint {
+    font-size: 12px; color: var(--dim); letter-spacing: 1.5px;
+    margin-top: 4px; opacity: 0;
+    animation: fadeIn 0.4s 0.2s ease forwards;
+  }
+  @keyframes countPop {
+    0% { opacity: 0; transform: scale(2.2); }
+    50% { opacity: 1; }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+  @keyframes countExit {
+    0% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.5); }
+  }
+
+  /* ── Result Overlay ── */
+  #result-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(6,6,12,0.94); z-index: 100;
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  .result-card {
+    background: var(--surface); border-radius: 20px;
+    padding: 32px 24px; max-width: 400px; width: 100%;
+    text-align: center; border: 1px solid var(--border);
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    animation: popIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.85); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .result-emoji { font-size: 52px; }
+  .result-title {
+    font-family: var(--font-display); font-size: 30px;
+    letter-spacing: 2px; margin: 0;
+  }
+  .result-sub { color: var(--dim); font-size: 13px; }
+
+  .share-preview {
+    background: var(--bg); border-radius: 12px;
+    padding: 16px 18px; width: 100%;
+    border: 1px solid var(--border);
+  }
+  .share-preview pre {
+    font-family: var(--font-mono); font-size: 12.5px;
+    line-height: 1.65; color: var(--text); white-space: pre;
+    text-align: left; margin: 0;
+  }
+
+  .share-btn {
+    background: linear-gradient(135deg, var(--green), #22b88a);
+    border: none; border-radius: 12px; padding: 14px 0;
+    width: 100%; font-size: 15px; font-family: var(--font-mono);
+    font-weight: 700; color: #fff; cursor: pointer;
+    box-shadow: 0 4px 18px var(--green-glow);
+    transition: transform 0.1s;
+  }
+  .share-btn:active { transform: scale(0.97); }
+
+  .replay-btn {
+    background: none; border: 1.5px solid var(--border);
+    border-radius: 12px; padding: 12px 0; width: 100%;
+    font-size: 13px; font-family: var(--font-mono);
+    color: var(--dim); cursor: pointer; transition: border-color 0.2s, color 0.2s;
+  }
+  .replay-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  /* ── Hidden video ── */
+  #yt-container {
+    position: fixed; top: -9999px; left: -9999px;
+    width: 640px; height: 640px;
+    overflow: hidden; pointer-events: none; opacity: 0;
+  }
+
+  @media (max-width: 440px) {
+    #start-screen { padding: 32px 18px; gap: 22px; }
+    .logo-text { font-size: 36px; }
+    .stats-row { gap: 24px; }
+    .stat-value { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════ START SCREEN ════════ -->
+<div id="start-screen">
+  <div class="logo-area">
+    <div class="logo-icon">🧩</div>
+    <h1 class="logo-text">Frame Frenzy</h1>
+    <p class="tagline">Solve the puzzle before the video ends</p>
+  </div>
+
+  <div class="field-group">
+    <label class="field-label">YouTube URL</label>
+    <input id="url-input" class="url-input" type="text"
+      placeholder="https://youtube.com/watch?v=..." autocomplete="off"/>
+    <div id="url-error" class="error-msg" style="display:none"></div>
+  </div>
+
+  <div class="field-group">
+    <label class="field-label">Grid Size</label>
+    <div class="size-row" id="size-row"></div>
+  </div>
+
+  <button class="play-btn" id="play-btn">
+    <span style="font-size:20px">▶</span> PLAY
+  </button>
+
+  <div class="how-to">
+    <div class="how-to-title">How it works</div>
+    <p>Your video becomes a scrambled sliding puzzle. Each tile shows its
+    section of the video in real-time — always moving, never pausing.
+    Slide the tiles to restore the image before the video ends, then
+    share your score with a challenge link!</p>
+  </div>
+</div>
+
+<!-- ════════ GAME SCREEN ════════ -->
+<div id="game-screen">
+  <div class="game-header">
+    <button class="back-btn" id="back-btn">← Back</button>
+    <div class="header-logo">🧩 Frame Frenzy</div>
+  </div>
+
+  <div class="timer-track"><div class="timer-fill" id="timer-fill"></div></div>
+
+  <div class="stats-row">
+    <div class="stat">
+      <span class="stat-label">TIME LEFT</span>
+      <span class="stat-value" id="stat-time">—:——</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">MOVES</span>
+      <span class="stat-value" id="stat-moves">0</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">GRID</span>
+      <span class="stat-value" id="stat-grid">3×3</span>
+    </div>
+  </div>
+
+  <div class="puzzle-wrap" id="puzzle-wrap">
+    <canvas id="puzzle-canvas"></canvas>
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading video…</div>
+    </div>
+    <div id="countdown-overlay"></div>
+  </div>
+</div>
+
+<!-- ════════ RESULT OVERLAY ════════ -->
+<div id="result-overlay">
+  <div class="result-card">
+    <div class="result-emoji" id="result-emoji"></div>
+    <h2 class="result-title" id="result-title"></h2>
+    <p class="result-sub" id="result-sub"></p>
+    <div class="share-preview"><pre id="share-text"></pre></div>
+    <button class="share-btn" id="share-btn">📋 Copy Result</button>
+    <button class="replay-btn" id="replay-btn">Play Again</button>
+  </div>
+</div>
+
+<!-- Hidden YT player -->
+<div id="yt-container"><div id="yt-player"></div></div>
+
+<!-- ════════ YOUTUBE API ════════ -->
+<script>
+  // Load YT API
+  const ytTag = document.createElement('script');
+  ytTag.src = 'https://www.youtube.com/iframe_api';
+  document.body.appendChild(ytTag);
+  let ytReady = false;
+  window.onYouTubeIframeAPIReady = () => { ytReady = true; };
+</script>
+
+<script>
+(function() {
+  "use strict";
+
+  // ── Config ──
+  const GRID_SIZES = [3, 4, 5, 6];
+  const HIDDEN_VIDEO_SIZE = 640; // px for hidden player
+  let PUZZLE_SIZE = 380;
+
+  // ── State ──
+  let gridSize = 3;
+  let videoId = null;
+  let tiles = [];
+  let moves = 0;
+  let elapsed = 0;
+  let duration = 0;
+  let startTime = null;
+  let winTime = null;
+  let gameState = 'idle'; // idle | playing | won | lost
+  let player = null;
+  let rafId = null;
+  let videoReady = false;
+
+  // ── DOM refs ──
+  const $start = document.getElementById('start-screen');
+  const $game = document.getElementById('game-screen');
+  const $result = document.getElementById('result-overlay');
+  const $urlInput = document.getElementById('url-input');
+  const $urlError = document.getElementById('url-error');
+  const $sizeRow = document.getElementById('size-row');
+  const $playBtn = document.getElementById('play-btn');
+  const $backBtn = document.getElementById('back-btn');
+  const $timerFill = document.getElementById('timer-fill');
+  const $statTime = document.getElementById('stat-time');
+  const $statMoves = document.getElementById('stat-moves');
+  const $statGrid = document.getElementById('stat-grid');
+  const $puzzleWrap = document.getElementById('puzzle-wrap');
+  const $canvas = document.getElementById('puzzle-canvas');
+  const ctx = $canvas.getContext('2d');
+  const $loading = document.getElementById('loading-overlay');
+  const $countdown = document.getElementById('countdown-overlay');
+  const $resultEmoji = document.getElementById('result-emoji');
+  const $resultTitle = document.getElementById('result-title');
+  const $resultSub = document.getElementById('result-sub');
+  const $shareText = document.getElementById('share-text');
+  const $shareBtn = document.getElementById('share-btn');
+  const $replayBtn = document.getElementById('replay-btn');
+
+  // ── Helpers ──
+  function extractVideoId(url) {
+    if (!url) return null;
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=)([^&\s#]+)/,
+      /(?:youtu\.be\/)([^?\s#]+)/,
+      /(?:youtube\.com\/embed\/)([^?\s#]+)/,
+      /(?:youtube\.com\/shorts\/)([^?\s#]+)/,
+    ];
+    for (const p of patterns) {
+      const m = url.match(p);
+      if (m) return m[1];
+    }
+    // Bare video ID (11 chars)
+    if (/^[A-Za-z0-9_-]{11}$/.test(url.trim())) return url.trim();
+    return null;
+  }
+
+  function formatTime(sec) {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return m + ':' + String(s).padStart(2, '0');
+  }
+
+  function calcPuzzleSize() {
+    const w = window.innerWidth;
+    if (w < 400) return Math.min(w - 32, 340);
+    if (w < 540) return 370;
+    return 420;
+  }
+
+  // ── Solvable shuffle ──
+  function generatePuzzle(size) {
+    const total = size * size;
+    const blank = total - 1;
+    let arr = Array.from({length: total}, (_, i) => i);
+
+    // Fisher-Yates
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+
+    // Inversion count (skip blank)
+    const flat = arr.filter(t => t !== blank);
+    let inv = 0;
+    for (let i = 0; i < flat.length; i++)
+      for (let j = i + 1; j < flat.length; j++)
+        if (flat[i] > flat[j]) inv++;
+
+    const blankRow = Math.floor(arr.indexOf(blank) / size);
+    let solvable;
+    if (size % 2 === 1) {
+      solvable = inv % 2 === 0;
+    } else {
+      const fromBottom = size - blankRow;
+      solvable = (fromBottom % 2 === 1 && inv % 2 === 0) ||
+                 (fromBottom % 2 === 0 && inv % 2 === 1);
+    }
+    if (!solvable) {
+      const a = arr[0] === blank ? 1 : 0;
+      const b = arr[a + 1] === blank ? a + 2 : a + 1;
+      [arr[a], arr[b]] = [arr[b], arr[a]];
+    }
+
+    // Make sure it's not already solved
+    if (arr.every((v, i) => v === i)) {
+      // swap first two non-blank
+      const a = arr[0] === blank ? 1 : 0;
+      const b = arr[a + 1] === blank ? a + 2 : a + 1;
+      [arr[a], arr[b]] = [arr[b], arr[a]];
+    }
+
+    return arr;
+  }
+
+  // ── URL params ──
+  function readParams() {
+    const p = new URLSearchParams(window.location.search);
+    const v = p.get('v');
+    const g = parseInt(p.get('g'));
+    if (v) $urlInput.value = 'https://youtube.com/watch?v=' + v;
+    if (GRID_SIZES.includes(g)) gridSize = g;
+  }
+
+  function buildChallengeUrl() {
+    const base = window.location.origin + window.location.pathname;
+    return base + '?v=' + videoId + '&g=' + gridSize;
+  }
+
+  function pushParams() {
+    const url = new URL(window.location);
+    url.searchParams.set('v', videoId);
+    url.searchParams.set('g', gridSize);
+    history.replaceState(null, '', url);
+  }
+
+  // ── Size buttons ──
+  function renderSizeBtns() {
+    $sizeRow.innerHTML = '';
+    GRID_SIZES.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'size-btn' + (s === gridSize ? ' active' : '');
+      btn.textContent = s + '×' + s;
+      btn.onclick = () => { gridSize = s; renderSizeBtns(); };
+      $sizeRow.appendChild(btn);
+    });
+  }
+
+  // ── Screen transitions ──
+  function showScreen(name) {
+    $start.style.display = name === 'start' ? 'flex' : 'none';
+    $game.style.display = name === 'game' ? 'flex' : 'none';
+    $result.style.display = name === 'result' ? 'flex' : 'none';
+    if (name === 'game') $game.style.animation = 'fadeUp 0.4s ease both';
+  }
+
+  // ── Canvas rendering ──
+  // Single YT player behind a transparent canvas overlay.
+  // Canvas draws: grid lines, tile numbers/hues, blank mask, correct-tile glow.
+  // Video plays underneath — tiles are tracked by number + color.
+
+  const TILE_HUES = [];
+  function generateTileHues(n) {
+    TILE_HUES.length = 0;
+    for (let i = 0; i < n * n - 1; i++) {
+      TILE_HUES.push((i * (360 / (n * n - 1))) % 360);
+    }
+  }
+
+  // ── Countdown ──
+  function runCountdown(onComplete) {
+    $countdown.style.display = 'flex';
+    const steps = [
+      { text: '3', className: 'countdown-number', hint: 'Study the board…', duration: 900 },
+      { text: '2', className: 'countdown-number', hint: '', duration: 900 },
+      { text: '1', className: 'countdown-number', hint: '', duration: 900 },
+      { text: 'GO!', className: 'countdown-go', hint: '', duration: 600 },
+    ];
+    let i = 0;
+    function showStep() {
+      if (i >= steps.length) {
+        $countdown.style.display = 'none';
+        $countdown.innerHTML = '';
+        onComplete();
+        return;
+      }
+      const step = steps[i];
+      // Fade out previous
+      $countdown.innerHTML = '';
+      const el = document.createElement('div');
+      el.className = step.className;
+      el.textContent = step.text;
+      $countdown.appendChild(el);
+      if (step.hint) {
+        const hint = document.createElement('div');
+        hint.className = 'countdown-hint';
+        hint.textContent = step.hint;
+        $countdown.appendChild(hint);
+      }
+      i++;
+      setTimeout(() => {
+        // exit animation
+        el.style.animation = 'countExit 0.2s ease forwards';
+        setTimeout(showStep, 200);
+      }, step.duration - 200);
+    }
+    showStep();
+  }
+
+  let ytPlayerEl = null; // the actual iframe/div for the visible player
+  let puzzlePlayer = null;
+
+  function createVisiblePlayer() {
+    // Destroy previous
+    if (puzzlePlayer) { try { puzzlePlayer.destroy(); } catch(e){} puzzlePlayer = null; }
+    // Remove old iframe if any
+    const old = document.getElementById('puzzle-yt');
+    if (old) old.remove();
+
+    const div = document.createElement('div');
+    div.id = 'puzzle-yt';
+    div.style.cssText = `position:absolute;top:0;left:0;width:${PUZZLE_SIZE}px;height:${PUZZLE_SIZE}px;z-index:0;border-radius:8px;overflow:hidden;`;
+    $puzzleWrap.insertBefore(div, $canvas);
+
+    puzzlePlayer = new YT.Player('puzzle-yt', {
+      videoId: videoId,
+      width: PUZZLE_SIZE,
+      height: PUZZLE_SIZE,
+      playerVars: {
+        autoplay: 1, controls: 0, disablekb: 1, modestbranding: 1,
+        rel: 0, showinfo: 0, iv_load_policy: 3, fs: 0, playsinline: 1,
+      },
+      events: {
+        onReady: (e) => {
+          duration = e.target.getDuration();
+          videoReady = true;
+          e.target.pauseVideo();
+          $loading.style.display = 'none';
+          // Draw the initial scrambled board so player can study it
+          drawPuzzle();
+          runCountdown(() => {
+            startTime = Date.now();
+            gameState = 'playing';
+            e.target.seekTo(0, true);
+            e.target.playVideo();
+            startGameLoop();
+          });
+        },
+        onStateChange: (e) => {
+          if (e.data === YT.PlayerState.ENDED && gameState === 'playing') {
+            endGame(false);
+          }
+        }
+      }
+    });
+  }
+
+  function drawPuzzle() {
+    const size = PUZZLE_SIZE;
+    const ts = size / gridSize;
+    const blank = gridSize * gridSize - 1;
+
+    ctx.clearRect(0, 0, size, size);
+
+    // Draw tile overlays
+    for (let idx = 0; idx < tiles.length; idx++) {
+      const tile = tiles[idx];
+      const row = Math.floor(idx / gridSize);
+      const col = idx % gridSize;
+      const x = col * ts;
+      const y = row * ts;
+
+      if (tile === blank) {
+        // Blank tile — dark mask
+        ctx.fillStyle = 'rgba(6,6,12,0.88)';
+        ctx.fillRect(x, y, ts, ts);
+        continue;
+      }
+
+      const isCorrect = tile === idx;
+      const hue = TILE_HUES[tile];
+
+      // Subtle color tint overlay per tile so you can track them
+      ctx.fillStyle = `hsla(${hue}, 70%, 55%, 0.12)`;
+      ctx.fillRect(x + 1, y + 1, ts - 2, ts - 2);
+
+      // Correct tile glow
+      if (isCorrect) {
+        ctx.strokeStyle = 'rgba(45,212,160,0.7)';
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(x + 1.5, y + 1.5, ts - 3, ts - 3);
+      }
+
+      // Tile number
+      const fontSize = ts < 60 ? 11 : ts < 80 ? 14 : 17;
+      ctx.font = `700 ${fontSize}px 'JetBrains Mono', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Shadow
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillText(tile + 1, x + ts / 2 + 1, y + ts / 2 + 1);
+
+      // Number with tile hue
+      ctx.fillStyle = isCorrect
+        ? 'rgba(45,212,160,0.95)'
+        : `hsla(${hue}, 80%, 75%, 0.9)`;
+      ctx.fillText(tile + 1, x + ts / 2, y + ts / 2);
+    }
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1.5;
+    for (let i = 1; i < gridSize; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * ts, 0); ctx.lineTo(i * ts, size);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, i * ts); ctx.lineTo(size, i * ts);
+      ctx.stroke();
+    }
+  }
+
+  // ── Game loop ──
+  function startGameLoop() {
+    function loop() {
+      if (gameState !== 'playing') return;
+
+      const now = Date.now();
+      elapsed = (now - startTime) / 1000;
+
+      // Update stats
+      const timeLeft = Math.max(0, duration - elapsed);
+      const pct = duration > 0 ? (elapsed / duration) * 100 : 0;
+      $statTime.textContent = formatTime(timeLeft);
+      $statTime.style.color = pct > 80 ? 'var(--accent)' : pct > 60 ? 'var(--yellow)' : 'var(--text)';
+      $statMoves.textContent = moves;
+
+      // Timer bar
+      const remain = 100 - pct;
+      $timerFill.style.width = remain + '%';
+      if (pct > 80) {
+        $timerFill.style.background = 'var(--accent)';
+        $timerFill.style.boxShadow = '0 0 14px var(--accent-glow)';
+      } else if (pct > 55) {
+        $timerFill.style.background = 'var(--yellow)';
+        $timerFill.style.boxShadow = '0 0 14px rgba(251,191,36,0.3)';
+      } else {
+        $timerFill.style.background = 'var(--green)';
+        $timerFill.style.boxShadow = '0 0 14px var(--green-glow)';
+      }
+
+      // Time's up
+      if (duration > 0 && elapsed >= duration) {
+        endGame(false);
+        return;
+      }
+
+      drawPuzzle();
+      rafId = requestAnimationFrame(loop);
+    }
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ── Tile interaction ──
+  function getBlankIdx() { return tiles.indexOf(gridSize * gridSize - 1); }
+
+  function isAdjacent(idx) {
+    const bi = getBlankIdx();
+    const br = Math.floor(bi / gridSize), bc = bi % gridSize;
+    const tr = Math.floor(idx / gridSize), tc = idx % gridSize;
+    return (Math.abs(br - tr) === 1 && bc === tc) ||
+           (Math.abs(bc - tc) === 1 && br === tr);
+  }
+
+  function moveTile(idx) {
+    if (gameState !== 'playing') return;
+    if (!isAdjacent(idx)) return;
+    const bi = getBlankIdx();
+    [tiles[idx], tiles[bi]] = [tiles[bi], tiles[idx]];
+    moves++;
+    // Check win
+    if (tiles.every((v, i) => v === i)) {
+      winTime = (Date.now() - startTime) / 1000;
+      endGame(true);
+    }
+  }
+
+  // Handle clicks/taps on canvas
+  function handleCanvasInput(e) {
+    e.preventDefault();
+    const rect = $canvas.getBoundingClientRect();
+    let cx, cy;
+    if (e.touches) {
+      cx = e.touches[0].clientX - rect.left;
+      cy = e.touches[0].clientY - rect.top;
+    } else {
+      cx = e.clientX - rect.left;
+      cy = e.clientY - rect.top;
+    }
+    const ts = PUZZLE_SIZE / gridSize;
+    const col = Math.floor(cx / ts);
+    const row = Math.floor(cy / ts);
+    if (col < 0 || col >= gridSize || row < 0 || row >= gridSize) return;
+    const idx = row * gridSize + col;
+    moveTile(idx);
+    drawPuzzle(); // immediate feedback
+  }
+
+  $canvas.addEventListener('click', handleCanvasInput);
+  $canvas.addEventListener('touchstart', handleCanvasInput, { passive: false });
+
+  // Keyboard support
+  document.addEventListener('keydown', (e) => {
+    if (gameState !== 'playing') return;
+    const bi = getBlankIdx();
+    const br = Math.floor(bi / gridSize), bc = bi % gridSize;
+    let targetIdx = -1;
+    // Arrow moves the tile INTO the blank (opposite direction)
+    if (e.key === 'ArrowUp' && br < gridSize - 1) targetIdx = (br + 1) * gridSize + bc;
+    else if (e.key === 'ArrowDown' && br > 0) targetIdx = (br - 1) * gridSize + bc;
+    else if (e.key === 'ArrowLeft' && bc < gridSize - 1) targetIdx = br * gridSize + (bc + 1);
+    else if (e.key === 'ArrowRight' && bc > 0) targetIdx = br * gridSize + (bc - 1);
+    if (targetIdx >= 0) {
+      e.preventDefault();
+      moveTile(targetIdx);
+      drawPuzzle();
+    }
+  });
+
+  // ── End game ──
+  function endGame(won) {
+    gameState = won ? 'won' : 'lost';
+    cancelAnimationFrame(rafId);
+    if (puzzlePlayer) try { puzzlePlayer.pauseVideo(); } catch(e){}
+
+    // Final draw
+    drawPuzzle();
+
+    // Populate result overlay
+    $resultEmoji.textContent = won ? '🎉' : '⏰';
+    $resultTitle.textContent = won ? 'SOLVED!' : "TIME'S UP";
+    $resultTitle.style.color = won ? 'var(--green)' : 'var(--accent)';
+    $resultSub.textContent = won
+      ? `Completed in ${formatTime(winTime)} with ${moves} moves`
+      : `You made ${moves} moves. Better luck next time!`;
+
+    $shareText.textContent = generateShareText(won);
+    showScreen('result');
+    // Keep game screen visible behind overlay
+    $game.style.display = 'flex';
+  }
+
+  function generateShareText(won) {
+    const time = won ? formatTime(winTime) : 'DNF';
+    const blank = gridSize * gridSize - 1;
+    const rows = [];
+    for (let r = 0; r < gridSize; r++) {
+      let row = '';
+      for (let c = 0; c < gridSize; c++) {
+        const idx = r * gridSize + c;
+        const tile = tiles[idx];
+        if (tile === blank) row += '⬛';
+        else if (tile === idx) row += '🟩';
+        else row += '🟥';
+      }
+      rows.push(row);
+    }
+    const lines = [
+      `🧩 Frame Frenzy ${gridSize}×${gridSize}`,
+      `${won ? '✅' : '❌'} ${time} | ${moves} moves`,
+      '',
+      ...rows,
+      '',
+      buildChallengeUrl(),
+    ];
+    return lines.join('\n');
+  }
+
+  // ── Share ──
+  $shareBtn.addEventListener('click', () => {
+    const text = $shareText.textContent;
+    if (navigator.share) {
+      navigator.share({ text }).catch(() => copyFallback(text));
+    } else {
+      copyFallback(text);
+    }
+  });
+
+  function copyFallback(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      $shareBtn.textContent = '✓ Copied!';
+      setTimeout(() => { $shareBtn.textContent = '📋 Copy Result'; }, 2200);
+    }).catch(() => {
+      // Textarea fallback
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta);
+      $shareBtn.textContent = '✓ Copied!';
+      setTimeout(() => { $shareBtn.textContent = '📋 Copy Result'; }, 2200);
+    });
+  }
+
+  // ── Start / Reset ──
+  function startGame() {
+    const raw = $urlInput.value.trim();
+    const vid = extractVideoId(raw);
+    if (!vid) {
+      $urlError.textContent = "Couldn't find a YouTube video ID in that URL";
+      $urlError.style.display = 'block';
+      $urlInput.classList.add('error');
+      return;
+    }
+    $urlError.style.display = 'none';
+    $urlInput.classList.remove('error');
+
+    videoId = vid;
+    PUZZLE_SIZE = calcPuzzleSize();
+    tiles = generatePuzzle(gridSize);
+    moves = 0; elapsed = 0; duration = 0;
+    startTime = null; winTime = null;
+    videoReady = false;
+    gameState = 'idle';
+
+    generateTileHues(gridSize);
+
+    // Setup canvas
+    const dpr = window.devicePixelRatio || 1;
+    $canvas.width = PUZZLE_SIZE * dpr;
+    $canvas.height = PUZZLE_SIZE * dpr;
+    $canvas.style.width = PUZZLE_SIZE + 'px';
+    $canvas.style.height = PUZZLE_SIZE + 'px';
+    ctx.scale(dpr, dpr);
+
+    $puzzleWrap.style.width = PUZZLE_SIZE + 'px';
+    $puzzleWrap.style.height = PUZZLE_SIZE + 'px';
+
+    // Canvas sits above the video
+    $canvas.style.position = 'relative';
+    $canvas.style.zIndex = '2';
+
+    $statGrid.textContent = gridSize + '×' + gridSize;
+    $statMoves.textContent = '0';
+    $statTime.textContent = '—:——';
+    $statTime.style.color = 'var(--text)';
+    $timerFill.style.width = '100%';
+    $timerFill.style.background = 'var(--green)';
+    $loading.style.display = 'flex';
+
+    pushParams();
+    showScreen('game');
+
+    // Wait for YT API
+    function boot() {
+      if (typeof YT !== 'undefined' && YT.Player) {
+        createVisiblePlayer();
+      } else {
+        setTimeout(boot, 150);
+      }
+    }
+    boot();
+  }
+
+  function resetGame() {
+    gameState = 'idle';
+    cancelAnimationFrame(rafId);
+    if (puzzlePlayer) { try { puzzlePlayer.destroy(); } catch(e){} puzzlePlayer = null; }
+    const old = document.getElementById('puzzle-yt');
+    if (old) old.remove();
+    $countdown.style.display = 'none';
+    $countdown.innerHTML = '';
+    // Clear URL params
+    const url = new URL(window.location);
+    url.searchParams.delete('v');
+    url.searchParams.delete('g');
+    history.replaceState(null, '', url);
+    showScreen('start');
+  }
+
+  // ── Event wiring ──
+  $playBtn.addEventListener('click', startGame);
+  $urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') startGame(); });
+  $urlInput.addEventListener('input', () => {
+    $urlError.style.display = 'none';
+    $urlInput.classList.remove('error');
+  });
+  $backBtn.addEventListener('click', resetGame);
+  $replayBtn.addEventListener('click', () => {
+    $result.style.display = 'none';
+    resetGame();
+  });
+
+  // ── Init ──
+  renderSizeBtns();
+  readParams();
+  renderSizeBtns(); // re-render with possibly updated gridSize
+
+  // Auto-start if URL params present
+  if ($urlInput.value && extractVideoId($urlInput.value)) {
+    // Small delay to let YT API load
+    setTimeout(startGame, 400);
+  }
+
+  // Handle resize
+  window.addEventListener('resize', () => {
+    if (gameState === 'playing') {
+      // Don't resize mid-game, it would mess up the player
+      return;
+    }
+  });
+})();
+</script>
+</body>
+</html>
