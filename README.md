@@ -22,11 +22,15 @@ The round ends the moment the board is solved, or when the video ends.
 Winners get a copyable/sharable they can use to challenge their friends:
 
 🧩 Frame Frenzy 3×3
+
 ✅ 1:51 | 118 moves
 
 🟩🟩🟩
+
 🟩🟩🟩
+
 🟩🟩⬛
+
 https://framefrenzy.games/?v=E4WlUXrJgy4&g=3
 
 ## Notes
