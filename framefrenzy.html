@@ -1102,6 +1102,19 @@
     return url;
   }
 
+  function getPublicChallengeUrl() {
+    const canonicalHref = document.querySelector('link[rel="canonical"]')?.href;
+    const url = canonicalHref ? new URL(canonicalHref) : getCanonicalAppUrl();
+    let pathname = url.pathname;
+    pathname = pathname.replace(/(?:\/index\.html|\/framefrenzy\.html|\/framefrenzy)$/, '/');
+    pathname = pathname.replace(/\/+/g, '/');
+    if (!pathname.endsWith('/')) pathname += '/';
+    url.pathname = pathname;
+    url.search = '';
+    url.hash = '';
+    return url;
+  }
+
   function normalizeCurrentRoute() {
     const canonical = getCanonicalAppUrl();
     canonical.search = window.location.search;
@@ -1443,7 +1456,7 @@
   }
 
   function buildChallengeUrl() {
-    const url = getCanonicalAppUrl();
+    const url = getPublicChallengeUrl();
     url.searchParams.delete('v');
     url.searchParams.delete('g');
     url.searchParams.set('video', videoId);
